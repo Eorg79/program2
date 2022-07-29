@@ -10,7 +10,6 @@ pub enum ErrorCode {
     NotAuthor,
 }
 //2. business logic
-
 #[program]
 pub mod program2 {
     use super::*;
@@ -19,7 +18,7 @@ pub mod program2 {
         //retrieve info from ctx
         let message:&mut Account<Message> = &mut ctx.accounts.message; // ctx. syntax to access to message account, already initalized by init constraint
         let author: &Signer = &ctx.accounts.initializer;
-        let clock: Clock = Clock::get().unwrap();
+        let clock: Clock = Clock::get()?;
         
         message.author = *author.key;
         message.sentence = sentence;
@@ -65,12 +64,11 @@ pub struct Write<'info> {//lifetime
     
 }
 
-
 #[derive(Accounts)] // derive attribut privided by Anchor
 pub struct Delete<'info> {//lifetime
-    #[account(mut, address=message.author @ErrorCode::NotAuthor)] //a constraint, mutable to update his sol balance (is payer)
+    #[account(mut)] //a constraint, mutable to update his sol balance (is payer)
     pub initializer: Signer<'info>, //Signer: type of signer account
-    #[account(mut, close = initializer)] //close constraint to close account at the end of the instruction
+    #[account(mut, close = initializer, constraint= initializer.key() == message.author @ErrorCode::NotAuthor)] //close constraint to close account at the end of the instruction
     pub message: Account<'info, Message>, // account to store message, it is an account of type Message, so the data will be parsed accordingly
     
 }

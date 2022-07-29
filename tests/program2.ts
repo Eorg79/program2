@@ -1,22 +1,26 @@
 import * as anchor from "@project-serum/anchor";
-import { AnchorError, LangErrorCode, LangErrorMessage, Program, ProgramError } from "@project-serum/anchor";
+import {
+  AnchorError,
+  LangErrorCode,
+  LangErrorMessage,
+  Program,
+  ProgramError,
+} from "@project-serum/anchor";
 import { publicKey } from "@project-serum/anchor/dist/cjs/utils";
 import { assert } from "chai";
 import { Program2 } from "../target/types/program2";
-const util = require('util');
+const util = require("util");
 const { SystemProgram } = anchor.web3;
-
 
 describe("program2", () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.local();
   anchor.setProvider(provider);
-  
-  it("should store a new message", async () => {
 
-    const program = anchor.workspace.Program2 as Program<Program2>; 
+  it("should store a new message", async () => {
+    const program = anchor.workspace.Program2 as Program<Program2>;
     const message = anchor.web3.Keypair.generate();
-    
+
     const utf8Encode = new util.TextEncoder();
     let msg = new Uint8Array(100);
     msg.set(utf8Encode.encode("hello Solana"));
@@ -24,100 +28,104 @@ describe("program2", () => {
 
     // program object contain an rpc object which exposes an API matching program instructions
     await program.methods
-                  .write(sentence) 
-                  .accounts({
-                  initializer: provider.wallet.publicKey,
-                  message: message.publicKey,
-                  systemProgram: SystemProgram.programId,
-                 })
+      .write(sentence)
+      .accounts({
+        initializer: provider.wallet.publicKey,
+        message: message.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
 
-                 .signers([message]) //no need to mention initializer, he is signer type
-                 .rpc()
-                 ;
+      .signers([message]) //no need to mention initializer, he is signer type
+      .rpc();
 
-    const messageAccount = await program.account.message.fetch(message.publicKey);
-    console.log((messageAccount));
+    const messageAccount = await program.account.message.fetch(
+      message.publicKey
+    );
+    console.log(messageAccount);
 
     assert.equal(messageAccount.sentence.toString, sentence.toString);
-    assert.equal(messageAccount.author.toBase58, provider.wallet.publicKey.toBase58);
+    assert.equal(
+      messageAccount.author.toBase58,
+      provider.wallet.publicKey.toBase58
+    );
     assert.ok(messageAccount.timestamp);
   });
 
   it("should delete a message", async () => {
-    
-    const program = anchor.workspace.Program2 as Program<Program2>; 
-    const author = provider.wallet.publicKey ;
-    const messages = await program.account.message.all([{memcmp :{ offset:8, bytes: author.toBase58(),}}]);
+    const program = anchor.workspace.Program2 as Program<Program2>;
+    const author = provider.wallet.publicKey;
+    const messages = await program.account.message.all([
+      { memcmp: { offset: 8, bytes: author.toBase58() } },
+    ]);
     console.log(messages[0].publicKey);
     // program object contain an rpc object which exposes an API matching program instructions
     await program.methods
-                  .delete() 
-                  .accounts({
-                  initializer: provider.wallet.publicKey,
-                  message: messages[0].publicKey,
-                 })
-                 .rpc()
-                 ;
+      .delete()
+      .accounts({
+        initializer: provider.wallet.publicKey,
+        message: messages[0].publicKey,
+      })
+      .rpc();
 
-    try {      
-      
+    try {
       await program.account.message.fetch(messages[0].publicKey);
-
-    } catch(error) {           
+    } catch (error) {
       const dltmessage = messages[0].publicKey;
-      assert.equal(error.toString(), `Error: Account does not exist ${dltmessage}`);
+      assert.equal(
+        error.toString(),
+        `Error: Account does not exist ${dltmessage}`
+      );
       return;
     }
 
-    assert.fail('account does not exist');
-
+    assert.fail("account does not exist");
   });
 
   it("should not delete a message if initializer is not author", async () => {
-    const program = anchor.workspace.Program2 as Program<Program2>; 
+    const program = anchor.workspace.Program2 as Program<Program2>;
     const message = anchor.web3.Keypair.generate();
-    
+
     const utf8Encode = new util.TextEncoder();
     let msg = new Uint8Array(100);
     msg.set(utf8Encode.encode("hello Solana"));
     const sentence = Array.from(msg);
 
     await program.methods
-                  .write(sentence) 
-                  .accounts({
-                  initializer: provider.wallet.publicKey,
-                  message: message.publicKey,
-                  systemProgram: SystemProgram.programId,
-                 })
+      .write(sentence)
+      .accounts({
+        initializer: provider.wallet.publicKey,
+        message: message.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
 
-                 .signers([message]) //no need to mention initializer, he is signer type
-                 .rpc()
-                 ;
-                        
-      const initializer = anchor.web3.Keypair.generate();
-      const author = provider.wallet.publicKey ;
-      const messages = await program.account.message.all([{memcmp :{ offset:8, bytes: author.toBase58(),}}]);
-      
-      try {  
-      
-      await program.methods
-                    .delete() 
-                    .accounts({
-                    initializer: initializer.publicKey,
-                    message: messages[0].publicKey,
-                   })
-                   .rpc()
-                   ;
-    } catch (ProgramError) {
+      .signers([message]) //no need to mention initializer, he is signer type
+      .rpc();
 
-   //   assert.equal(ProgramError, 'NotAuthor');
+    const initializer = anchor.web3.Keypair.generate();
+    const res =  await provider.connection.requestAirdrop(initializer.publicKey, 1000000000000);
+    await provider.connection.confirmTransaction(res);
+    const author = provider.wallet.publicKey;
+    const messages = await program.account.message.all([
+      { memcmp: { offset: 8, bytes: author.toBase58() } },
+    ]);
+
+    try {
+    const ix =  await program.methods
+        .delete()
+        .accounts({
+          initializer: initializer.publicKey,
+          message: messages[0].publicKey,
+        })
+        .instruction();
+    const tx =new anchor.web3.Transaction().add(ix)
+       await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [initializer])
+
+    } catch (e) {
+      console.log(e);
+      //   assert.equal(ProgramError, 'NotAuthor');
       return;
     }
-    
-    assert.fail('Only author can delete message');
 
+    assert.fail("Only author can delete message");
   });
-
-
-
-})
+});
