@@ -36,22 +36,19 @@ describe("program2", () => {
                  ;
 
     const messageAccount = await program.account.message.fetch(message.publicKey);
-
-    assert.equal(messageAccount.author.toBase58(), provider.wallet.publicKey.toBase58());
- //   assert.equal(messageAccount.sentence, textmsg);
-    assert.ok(messageAccount.timestamp);
-
     console.log((messageAccount));
-    console.log((message.publicKey.toBase58()));
-  });
 
+    assert.equal(messageAccount.sentence.toString, sentence.toString);
+    assert.equal(messageAccount.author.toBase58, provider.wallet.publicKey.toBase58);
+    assert.ok(messageAccount.timestamp);
+  });
 
   it("should delete a message", async () => {
     
     const program = anchor.workspace.Program2 as Program<Program2>; 
     const author = provider.wallet.publicKey ;
     const messages = await program.account.message.all([{memcmp :{ offset:8, bytes: author.toBase58(),}}]);
-        
+    console.log(messages[0].publicKey);
     // program object contain an rpc object which exposes an API matching program instructions
     await program.methods
                   .delete() 
@@ -61,6 +58,18 @@ describe("program2", () => {
                  })
                  .rpc()
                  ;
+
+    try {      
+      
+      await program.account.message.fetch(messages[0].publicKey);
+
+    } catch(error) {           
+      const dltmessage = messages[0].publicKey;
+      assert.equal(error.toString(), `Error: Account does not exist ${dltmessage}`);
+      return;
+    }
+
+    assert.fail('account does not exist');
 
   });
 
@@ -73,7 +82,6 @@ describe("program2", () => {
     msg.set(utf8Encode.encode("hello Solana"));
     const sentence = Array.from(msg);
 
-    // program object contain an rpc object which exposes an API matching program instructions
     await program.methods
                   .write(sentence) 
                   .accounts({
@@ -85,12 +93,13 @@ describe("program2", () => {
                  .signers([message]) //no need to mention initializer, he is signer type
                  .rpc()
                  ;
-    try {
+                        
       const initializer = anchor.web3.Keypair.generate();
       const author = provider.wallet.publicKey ;
       const messages = await program.account.message.all([{memcmp :{ offset:8, bytes: author.toBase58(),}}]);
-          
-      // program object contain an rpc object which exposes an API matching program instructions
+      
+      try {  
+      
       await program.methods
                     .delete() 
                     .accounts({
@@ -99,13 +108,13 @@ describe("program2", () => {
                    })
                    .rpc()
                    ;
-    } catch (error) {
-      
-   //   assert.equal(AnchorError.parse.name, 'Only author can delete message');
+    } catch (ProgramError) {
+
+   //   assert.equal(ProgramError, 'NotAuthor');
       return;
     }
     
-    assert.fail('The instruction should have fail not initiated by author ')
+    assert.fail('Only author can delete message');
 
   });
 
